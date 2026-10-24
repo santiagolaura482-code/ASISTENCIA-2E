@@ -123,7 +123,7 @@ td input[type=number]{width:110px;text-align:right}
 .pct{display:flex;align-items:center;gap:8px;justify-content:flex-end}
 .pct .bar{width:70px;margin:0}
 .empty{padding:28px;text-align:center;color:var(--muted)}
-.settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .settings p,.card p{margin:0;color:var(--muted);font-size:14px}
 .modal-bg{position:fixed;inset:0;background:rgba(10,10,12,.55);display:grid;place-items:center;padding:16px;z-index:50}
 .modal{background:var(--surface);border:1px solid var(--line);border-radius:12px;max-width:440px;width:100%;padding:20px;display:flex;flex-direction:column;gap:14px}
@@ -251,20 +251,8 @@ function rutasUsadas(){const s=new Set();Object.values(S.registros).forEach(d=>O
 function diaAnteriorConAsistencia(f){return Object.keys(S.registros).filter(d=>d<f&&Object.keys(S.registros[d]).length).sort().pop()}
 
 function semilla(){
-  const nombres=[["Luis Quispe Huamán",0],["Carlos Mendoza Ríos",0],["Jorge Salazar Paredes",0],["Jhon Paucar Lima",1],["Miguel Torres Cárdenas",2],["Raúl Chávez Flores",2],["Pedro Vargas Lazo",2],["Kevin Ramos Ccahuana",3],["Diego Rojas Medina",3],["Anthony Huamán Soto",3]];
-  const cg=CARGOS_BASE.map(c=>({id:uid(),...c}));
-  const hoyS=hoy();
-  const personal=nombres.map(([n,c],i)=>({id:uid(),nombre:n,dni:"0000000"+(i+1),cargo:cg[c].nombre,monto:null,activo:true,alta:addDays(hoyS,-12),ejemplo:true}));
-  const registros={}; let seed=7; const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
-  for(let k=12;k>=0;k--){
-    const f=addDays(hoyS,-k); if(new Date(f+"T12:00:00").getDay()===0) continue; registros[f]={};
-    personal.forEach((p,i)=>{
-      if(k>0&&rnd()<.08) return; // algún día no vino
-      const pag=k>2||(k>0&&rnd()<.5);
-      registros[f][p.id]={ruta:"RUTA "+String(i%3+1).padStart(2,"0"),pag,obs:!pag&&i===2?"Paga el viernes":""};
-    });
-  }
-  return {cargos:cg,personal,registros,descansos:{},config:{tarifasV2:true}};
+  /* Inicio en blanco: solo los cargos con sus montos */
+  return {cargos:CARGOS_BASE.map(c=>({id:uid(),...c})),personal:[],registros:{},descansos:{},config:{tarifasV2:true}};
 }
 function migrar(){
   if(!Array.isArray(S.cargos)){
@@ -275,13 +263,17 @@ function migrar(){
   S.personal.forEach(p=>{if(p.monto===undefined)p.monto=null});
   S.config=S.config||{};
   S.descansos=S.descansos||{};
+  /* Quita los datos de ejemplo que pudieran quedar guardados */
+  const ej=new Set(S.personal.filter(p=>p.ejemplo).map(p=>p.id));
+  if(ej.size){S.personal=S.personal.filter(p=>!ej.has(p.id));Object.values(S.registros).forEach(d=>ej.forEach(i=>delete d[i]));ej.forEach(i=>delete S.descansos[i])}
+  Object.keys(S.registros).forEach(f=>{if(!Object.keys(S.registros[f]).length)delete S.registros[f]});
   /* Aplica una sola vez los montos acordados; después se editan libremente en Cargos */
   if(!S.config.tarifasV2){
     CARGOS_BASE.forEach((b,i)=>{const c=S.cargos.find(x=>x.nombre===b.nombre);if(c)c.monto=b.monto;else S.cargos.splice(Math.min(i,S.cargos.length),0,{id:uid(),...b})});
     S.config.tarifasV2=true;
   }
 }
-function cargar(){try{const s=localStorage.getItem(KEY);if(s){S=JSON.parse(s);migrar();return}}catch(e){} S=semilla()}
+function cargar(){try{const s=localStorage.getItem(KEY);if(s){S=JSON.parse(s);migrar();guardar();return}}catch(e){} S=semilla()}
 function guardar(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function reg(f,id){return (S.registros[f]||{})[id]}
 function setReg(f,id,patch){S.registros[f]=S.registros[f]||{};const cur=S.registros[f][id]||{ruta:"",pag:false,obs:""};S.registros[f][id]=Object.assign(cur,patch);guardar()}
@@ -333,7 +325,7 @@ function vDia(){
   <div id="bPrev"></div></form>
   <div class="head"><div class="filters"><select id="fCargo">${optCargos(fCargo,true)}</select><input type="text" id="fBuscar" placeholder="Buscar nombre, DNI o ruta" value="${esc(fBuscar)}"></div>
   <div class="toolbar"><button class="btn" data-act="irPersonal">+ Nuevo trabajador</button><button class="btn pri" data-act="pagarTodo" ${enDia.length?"":"disabled"}>Pagar a todos los pendientes</button></div></div>`;
-  if(!enDia.length) h+=`<div class="group"><div class="empty">Nadie está en la asistencia de este día. Agrega a cada trabajador con su ruta en el formulario de arriba${ant?", o usa <b>Copiar del día anterior</b>":""}.</div></div>`;
+  if(!enDia.length) h+=`<div class="group"><div class="empty">Nadie está en la asistencia de este día. Pega el mensaje de asistencia en <b>Cargar varios a la vez</b> o agrega a cada trabajador con su ruta${ant?", o usa <b>Copiar del día anterior</b>":""}.</div></div>`;
   cargos().forEach(c=>{
     const g=lista.filter(p=>cargoDia(p,reg(fecha,p.id))===c).sort((a,b)=>(reg(fecha,a.id).ruta||"").localeCompare(reg(fecha,b.id).ruta||"")||a.nombre.localeCompare(b.nombre)); if(!g.length) return;
     h+=`<section class="group" data-cargo="${esc(c)}"><div class="ghead"><h2>${esc(c)}</h2><span class="cnt" data-cnt></span></div>${g.map(rowHTML).join("")}</section>`;
@@ -622,7 +614,6 @@ function vAjustes(){
   return `<div class="head"><div><h1>Ajustes</h1><p class="sub">Respaldo y limpieza de datos</p></div></div>
   <div class="settings">
   <div class="card"><h2>Respaldo</h2><p>Los datos viven solo en este navegador. Exporta un respaldo con frecuencia o para pasarlo a otra PC.</p><div class="toolbar"><button class="btn" data-act="backup">Exportar respaldo (JSON)</button><button class="btn" data-act="restore">Importar respaldo</button></div></div>
-  <div class="card"><h2>Datos de ejemplo</h2><p>${S.personal.some(p=>p.ejemplo)?"Hay trabajadores de ejemplo con marcaciones de prueba.":"No quedan datos de ejemplo."}</p><div class="toolbar"><button class="btn" data-act="delEj" ${S.personal.some(p=>p.ejemplo)?"":"disabled"}>Eliminar ejemplos</button></div></div>
   <div class="card"><h2>Borrar todo</h2><p>Elimina todo el personal y todas las marcaciones. Los cargos se conservan. No se puede deshacer.</p><div class="toolbar"><button class="btn danger" data-act="wipe">Borrar todos los datos</button></div></div>
   </div>`;
 }
