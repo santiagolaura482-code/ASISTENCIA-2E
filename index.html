@@ -535,14 +535,28 @@ function dibujarDia(){
     h.addEventListener("click",()=>{fecha=d.f;view="dia";render();window.scrollTo(0,0)});
   });
 }
-function verTrabajador(id){
+function verTrabajador(id,scroll){
   const p=S.personal.find(x=>x.id===id); const fechas=fechasRango().filter(f=>reg(f,id));
   const t=totales(fechas,[p]);
   modal(`<h2>${esc(p.nombre)}</h2><p style="margin:0;color:var(--muted)">${esc(p.cargo)} · del ${fCorta(rFrom)} al ${fCorta(rTo)}</p>
   <div class="tiles">${tilesHTML(t,"días")}</div>
-  <div class="tbl-wrap" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Fecha</th><th>Ruta</th><th>Cargo</th><th class="n">Monto</th><th>Pago</th></tr></thead><tbody>
-  ${fechas.map(f=>{const r=reg(f,id);return `<tr><td style="white-space:nowrap"><span style="text-transform:capitalize">${diaSemana(f)}</span> ${fCorta(f)}</td><td style="font-family:var(--f-mono)">${esc(r.ruta||"—")}</td><td style="white-space:nowrap">${esc(cargoDia(p,r))}</td><td class="n">${soles(montoDia(p,r))}</td><td><span class="pill ${r.pag?"ok":"late"}">${r.pag?"Pagado":"Pendiente"}</span></td></tr>`}).join("")||`<tr><td colspan="5" class="empty">Sin días en este rango.</td></tr>`}
-  </tbody></table></div><div class="acts"><button class="btn" id="mCal">Ver calendario</button><button class="btn" id="mCerrar">Cerrar</button></div>`,m=>{m.querySelector("#mCerrar").onclick=cerrar;m.querySelector("#mCal").onclick=()=>abrirCalendario(id,fechas[fechas.length-1]);m.style.maxWidth="560px"});
+  <div class="tbl-wrap" id="mTbl" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Fecha</th><th>Ruta</th><th>Cargo</th><th class="n">Monto</th><th>Pago</th></tr></thead><tbody>
+  ${fechas.map(f=>{const r=reg(f,id);return `<tr><td style="white-space:nowrap"><span style="text-transform:capitalize">${diaSemana(f)}</span> ${fCorta(f)}</td><td style="font-family:var(--f-mono)">${esc(r.ruta||"—")}</td><td style="white-space:nowrap">${esc(cargoDia(p,r))}</td><td class="n">${soles(montoDia(p,r))}</td><td><button type="button" class="pay ${r.pag?"si":"no"}" data-pf="${f}" title="Cambiar a ${r.pag?"pendiente":"pagado"}">${r.pag?"✓ Pagado":"Pendiente"}</button></td></tr>`}).join("")||`<tr><td colspan="5" class="empty">Sin días en este rango.</td></tr>`}
+  </tbody></table></div>
+  <p class="hint">Toca Pendiente o Pagado para cambiar el estado de ese día.</p>
+  <div class="acts"><button class="btn" id="mCal">Ver calendario</button>${t.penN?`<button class="btn pri" id="mPagarTodo">Pagar todo lo pendiente (${soles(t.pen)})</button>`:""}<button class="btn" id="mCerrar">Cerrar</button></div>`,m=>{
+    m.style.maxWidth="580px";
+    const tbl=m.querySelector("#mTbl"); if(scroll) tbl.scrollTop=scroll;
+    const refrescar=msg=>{guardar();render();verTrabajador(id,tbl.scrollTop);toast(msg)};
+    m.querySelector("#mCerrar").onclick=cerrar;
+    m.querySelector("#mCal").onclick=()=>abrirCalendario(id,fechas[fechas.length-1]);
+    m.querySelectorAll("[data-pf]").forEach(bt=>bt.onclick=()=>{const r=reg(bt.dataset.pf,id);r.pag=!r.pag;refrescar(`${fCorta(bt.dataset.pf)}: ${r.pag?"pagado":"pendiente"}`)});
+    const pt=m.querySelector("#mPagarTodo");
+    if(pt) pt.onclick=()=>{
+      if(!pt.dataset.ok){pt.dataset.ok="1";pt.textContent=`Confirmar: pagar ${t.penN} día(s) por ${soles(t.pen)}`;return}
+      fechas.forEach(f=>{reg(f,id).pag=true});refrescar(`${t.penN} día(s) marcados como pagados`)};
+    setTimeout(()=>{const c=m.querySelector("#mCerrar");if(document.activeElement&&m.contains(document.activeElement)&&document.activeElement.dataset.pf)c.focus({preventScroll:true})},0);
+  });
 }
 
 /* ---------- Vista: Calendario por trabajador ---------- */
